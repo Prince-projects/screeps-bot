@@ -10,8 +10,8 @@
 module.exports = {
     run: function (creep) {
         const target = creep.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-        if (creep.pos.getRangeTo(Game.spawns['Spawn1']) > 5 && !target) {
-            creep.moveTo(Game.spawns["Spawn1"].pos)
+        if (creep.pos.getRangeTo(Game.spawns['Spawn1']) > 10 && !target) {
+            creep.moveTo(Game.spawns["Spawn1"].pos.x - 5, Game.spawns["Spawn1"].pos.y - 5)
         }
         if (target) {
             if (creep.attack(target) == ERR_NOT_IN_RANGE) {

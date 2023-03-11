@@ -1,12 +1,12 @@
 
-//TODO - Mem cleanup script, iterate and see if alive if not = del memory
+//TODO
 // build a central resource storage, change haulers to deposit there if spawn + extension full, upgraders use only that. builders also source from that container.
 // Cap out phase @ 10
 
 // Set min amounts
 const creepgatherAmount = getMineableSpots(Game.spawns['Spawn1']);
-const creephaulAmount = Math.ceil(creepgatherAmount / 1.25);
-const creepUpAmount = Math.ceil(creepgatherAmount);
+const creephaulAmount = Math.ceil(creepgatherAmount / 1.1);
+const creepUpAmount = Math.ceil(creepgatherAmount * 1.25);
 const creepBuildAmount = Math.ceil(creepgatherAmount / 4);
 const creepDefAmount = Math.ceil(creepgatherAmount / 4);
 const creepAttackAmount = 0;
@@ -21,16 +21,17 @@ var currentAttackCreep = 0;
 var totalResource = 0;
 var storablesArr = [STRUCTURE_EXTENSION, STRUCTURE_SPAWN, STRUCTURE_STORAGE]
 var extensionArr = [STRUCTURE_EXTENSION]
+var storageArr = [STRUCTURE_STORAGE]
 var currentCreep = Game.spawns['Spawn1'].room.find(FIND_MY_CREEPS).length; // need to be room agnostic
 var currentPhase = 0;
 
 // Set basal parts
-var gatherParts = [MOVE, WORK, WORK, MOVE]
-var haulParts = [MOVE, MOVE, CARRY, CARRY, CARRY, MOVE]
-var upParts = [MOVE, MOVE, WORK, CARRY, CARRY]
-var buildParts = [MOVE, MOVE, CARRY, WORK, CARRY]
-var defendParts = [MOVE, MOVE, ATTACK, ATTACK]
-var attackParts = [MOVE, MOVE, ATTACK, ATTACK]
+var gatherParts = [MOVE, WORK, WORK]
+var haulParts = [MOVE, MOVE, CARRY, CARRY, MOVE]
+var upParts = [MOVE, MOVE, WORK, CARRY]
+var buildParts = [MOVE, MOVE, CARRY, WORK]
+var defendParts = [MOVE, MOVE, ATTACK]
+var attackParts = [MOVE, MOVE, ATTACK]
 
 // Add in modules
 var roleGather = require('gather')
@@ -47,8 +48,8 @@ var roleAttack = require('attack')
 resource_and_extension_total = getTotals() // Get total resource and extensions for use outside of func
 currentPhase = phaseCalc(resource_and_extension_total[0])
 spawnExtensions()
-console.log("total resource count " + resource_and_extension_total)
-console.log(currentPhase)
+console.log("total resource count, and extension goal " + resource_and_extension_total)
+console.log("Current phase: ", currentPhase)
 
 //**************************************
 //PHASE AND BUILD INIT
@@ -84,13 +85,13 @@ function getSourceSpots(Source) { // Function to get useable slots at an Energy 
 
 function getTotals() {
     // Find structures that can store resource
-    var storables = Game.spawns['Spawn1'].room.find(FIND_MY_STRUCTURES, { filter: (searchResource) => { return storablesArr.includes(searchResource.structureType) } })
+    var storables = Game.spawns['Spawn1'].room.find(FIND_STRUCTURES, { filter: (searchResource) => { return storablesArr.includes(searchResource.structureType) } })
     // Find all extension related items
-    var extensionAmount = Game.spawns['Spawn1'].room.find(FIND_MY_STRUCTURES, { filter: (searchExtension) => { return extensionArr.includes(searchExtension.structureType) } })
+    var extensionAmount = Game.spawns['Spawn1'].room.find(FIND_STRUCTURES, { filter: (searchExtension) => { return extensionArr.includes(searchExtension.structureType) } })
     var extensionConstructs = Game.spawns['Spawn1'].room.find(FIND_MY_CONSTRUCTION_SITES, { filter: (searchConstruct) => { return searchConstruct.structureType == STRUCTURE_EXTENSION } })
     // Find all storage related items
-    var storageAmount = Game.spawns['Spawn1'].room.find(FIND_MY_STRUCTURES, { filter: (searchStorage) => { return searchStorage.structureType == STRUCTURE_STORAGE } })
-    var storageConstructs = Game.spawns['Spawn1'].room.find(FIND_MY_CONSTRUCTION_SITES, { filter: (searchConstructStorage) => { return searchConstructStorage.structureType == STRUCTURE_STORAGE } })
+    var storageAmount = Game.spawns['Spawn1'].room.find(FIND_STRUCTURES, { filter: (searchStorage) => { return storageArr.includes(searchStorage.structureType)} })
+    var storageConstructs = Game.spawns['Spawn1'].room.find(FIND_CONSTRUCTION_SITES, { filter: (searchConstructStorage) => { return searchConstructStorage.structureType == STRUCTURE_STORAGE } })
     // Calc totals
     var extensionTotal = extensionConstructs.length + extensionAmount.length;
     var storageTotal = storageConstructs.length + storageAmount.length;
@@ -98,14 +99,14 @@ function getTotals() {
         var workingNum = storables[i].store.getUsedCapacity(RESOURCE_ENERGY)
         totalResource = totalResource + workingNum;
     }
-    return_arr = [totalResource, extensionTotal]
+    return_arr = [totalResource, extensionTotal, storageTotal]
     return return_arr
 }
 
 //Calc phase
 function phaseCalc(totalResource) {
     if (Game.spawns['Spawn1'].room.controller.level >= 3) {
-        switch (Math.floor((totalResource / 300 * Game.spawns['Spawn1'].room.controller.level) + 1)) {
+        switch (Math.floor(totalResource / 250)) {
             case 0:
                 currentPhase = 0;
             case 1:
@@ -153,21 +154,20 @@ function phaseCalc(totalResource) {
 
 // add more extension phases
 function spawnExtensions() {
-    if (Game.spawns['Spawn1'].room.controller.level >= 2 && resource_and_extension_total[1] < 5 * (currentPhase + 1)) {
+    if (Game.spawns['Spawn1'].room.controller.level >= 2 && resource_and_extension_total[1] < 5 * (Game.spawns['Spawn1'].room.controller.level - 1)) {
         // create extensions
         console.log("Attempting Extension Create...")
-        var upper_bound_x = Game.spawns['Spawn1'].pos.x + 2
-        var upper_bound_y = Game.spawns['Spawn1'].pos.y + 2
-        var lower_bound_x = Game.spawns['Spawn1'].pos.x - 2
-        var lower_bound_y = Game.spawns['Spawn1'].pos.y - 2
-        var x_final = Math.floor(Math.random() * upper_bound_x + lower_bound_x);
-        var y_final = Math.floor(Math.random() * upper_bound_y + lower_bound_x);
-        if (!x_final == Game.spawns["Spawn1"].pos.x && !y_final == (Game.spawns["Spawn1"].pos.y - 1)) {
+        var upper_bound_x = Game.spawns['Spawn1'].pos.x + 8
+        var upper_bound_y = Game.spawns['Spawn1'].pos.y + 8
+        var lower_bound_x = Game.spawns['Spawn1'].pos.x - 8
+        var lower_bound_y = Game.spawns['Spawn1'].pos.y - 8
+        var x_final = Math.floor(Math.random() * (upper_bound_x - lower_bound_x) + lower_bound_x)
+        var y_final = Math.floor(Math.random() * (upper_bound_y - lower_bound_y) + lower_bound_y)
+        if (x_final != Game.spawns["Spawn1"].pos.x && y_final != (Game.spawns["Spawn1"].pos.y - 1)) {
             Game.spawns['Spawn1'].room.createConstructionSite(x_final, y_final, STRUCTURE_EXTENSION)
         }
     }
 }
-// concat arrs to make more
 
 //**************************************
 //COUNT INIT
@@ -196,11 +196,9 @@ for (i in Game.creeps) {
     if (Game.creeps[i].memory.role == 'attack')
         currentAttackCreep++
 }
-if (currentHaulCreep == 0 && currentGatherCreep == 0) {
-    currentPhase = 0;
-}
 if (currentPhase > 1) {
     for (let i = 1; i < currentPhase; i++) {
+        console.log("Attempting creation of ", i, "sets of extra parts")
         gatherParts = gatherParts.concat(gatherParts)
         haulParts = haulParts.concat(haulParts)
         upParts = upParts.concat(upParts)
@@ -211,52 +209,57 @@ if (currentPhase > 1) {
     }
 }
 
+if (currentHaulCreep == 0 && currentGatherCreep == 0) {
+    console.log("Resetting phase to 0 due to lack of creeps..")
+    currentPhase = 0;
+}
+
 //**************************************
 //SPAWNING INIT
 //**************************************
 
 // Spawning initial gather creep on each spawn to hit cap
-if (creepgatherAmount > currentGatherCreep) {
+if (creepgatherAmount > currentGatherCreep && currentHaulCreep > 0 || currentGatherCreep < 1) {
     for (i in Game.spawns) {
         var currentTimeCreep = "Creep" + Game.time;
-        Game.spawns[i].spawnCreep(gatherParts, 'Creep' + Game.time, { memory: { role: 'gather' } });
+        Game.spawns[i].spawnCreep(gatherParts, 'CreepGather' + Game.time, { memory: { role: 'gather' } });
     };
 };
 // Spawning initial haul creep on each spawn to hit cap
 if (creephaulAmount > currentHaulCreep && currentGatherCreep > 0) {
     for (i in Game.spawns) {
         var currentTimeCreep = "Creep" + Game.time;
-        Game.spawns[i].spawnCreep(haulParts, 'Creep' + Game.time, { memory: { role: 'haul' } });
+        Game.spawns[i].spawnCreep(haulParts, 'CreepHaul' + Game.time, { memory: { role: 'haul' } });
     };
 };
 // Spawning initial upgrader creep on each spawn to hit cap
-if (creepUpAmount > currentUpCreep && currentGatherCreep > 0) {
+if (creepUpAmount > currentUpCreep && currentGatherCreep > 0 && currentHaulCreep > 0) {
     for (i in Game.spawns) {
         var currentTimeCreep = "Creep" + Game.time;
-        Game.spawns[i].spawnCreep(upParts, 'Creep' + Game.time, { memory: { role: 'upgrader' } });
+        Game.spawns[i].spawnCreep(upParts, 'CreepUp' + Game.time, { memory: { role: 'upgrader' } });
     };
 };
 // Spawning initial builder creep on each spawn to hit cap
 if (Game.spawns['Spawn1'].room.find(FIND_MY_CONSTRUCTION_SITES).length > 0) {
-    if (creepBuildAmount > currentBuildCreep && currentGatherCreep > 0) {
+    if (creepBuildAmount > currentBuildCreep && currentGatherCreep > 0 && currentHaulCreep > 0) {
         for (i in Game.spawns) {
             var currentTimeCreep = "Creep" + Game.time;
-            Game.spawns[i].spawnCreep(buildParts, 'Creep' + Game.time, { memory: { role: 'builder' } });
+            Game.spawns[i].spawnCreep(buildParts, 'CreepBuild' + Game.time, { memory: { role: 'builder' } });
         };
     };
 }
 // spawning initial defender creeps
-if (creepDefAmount > currentDefCreep && currentGatherCreep > 0) {
+if (creepDefAmount > currentDefCreep && currentGatherCreep > 0 && currentHaulCreep > 0) {
     for (i in Game.spawns) {
         var currentTimeCreep = "Creep" + Game.time;
-        Game.spawns[i].spawnCreep(defendParts, 'Creep' + Game.time, { memory: { role: 'meele' } });
+        Game.spawns[i].spawnCreep(defendParts, 'CreepDef' + Game.time, { memory: { role: 'meele' } });
     };
 };
 // spawning initial attack creeps
-if (creepAttackAmount > currentAttackCreep && currentGatherCreep > 0) {
+if (creepAttackAmount > currentAttackCreep && currentGatherCreep > 0 && currentHaulCreep > 0) {
     for (i in Game.spawns) {
         var currentTimeCreep = "Creep" + Game.time;
-        Game.spawns[i].spawnCreep(attackParts, 'Creep' + Game.time, { memory: { role: 'attack' } });
+        Game.spawns[i].spawnCreep(attackParts, 'CreepAtt' + Game.time, { memory: { role: 'attack' } });
     };
 };
 
